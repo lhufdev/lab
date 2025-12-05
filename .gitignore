@@ -1,0 +1,15 @@
+# macOS system files
+.DS_Store
+**/.DS_Store
+
+# Python Cache
+__pycache__/
+*.pyc
+
+# Node / TypeScript
+node_modules/
+dist/
+
+# Virtual envs
+venv/
+.env/
