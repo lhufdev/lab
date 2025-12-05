@@ -1,6 +1,0 @@
-[submodule "python/bookbot"]
-	path = python/bookbot
-	url = git@github.com:lhufdev/bookbot.git
-[submodule "python/asteroids-pygame"]
-	path = python/asteroids-pygame
-	url = git@github.com:lhufdev/asteroids-pygame.git
