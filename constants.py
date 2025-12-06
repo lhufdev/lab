@@ -1,8 +1,10 @@
-# Error Messages
-ERR_API_KEY_IS_NONE = "No API_KEY found... Is GEMINI_API_KEY set in .env?"
+from enum import StrEnum
 
-# Models
-MODEL_FLASH_25 = "gemini-2.5-flash"
 
-# Content Prompts
-TEST_PROMPT = "Why is Boot.dev such a great place to learn backend development? Use one paragraph maximum."
+class Model(StrEnum):
+    FLASH_25 = "gemini-2.5-flash"
+
+
+class ErrorMessage:
+    NO_API_KEY = "No API_KEY found... Is GEMINI_API_KEY set in .env?"
+    API_REQUEST_FAILED = "Something went wrong... API request failed."
