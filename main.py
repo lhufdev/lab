@@ -12,7 +12,7 @@ ENV_GEMINI_API_KEY: Final = "GEMINI_API_KEY"
 
 
 class GenerationResult(TypedDict):
-    user_prompt: str
+    user_prompt: str | None
     prompt_token_count: int | None
     response_token_count: int | None
     response_text: str | None
@@ -22,11 +22,11 @@ def load_env() -> None:
     load_dotenv()
 
 
-def get_user_prompt() -> str:
+def get_cli_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description="Chatbot")
-    parser.add_argument("prompt", nargs="+", help="User prompt")
-    args = parser.parse_args()
-    return " ".join(args.prompt)
+    parser.add_argument("prompt", nargs="+", help="user prompt")
+    parser.add_argument("--verbose", action="store_true", help="enable verbose output")
+    return parser.parse_args()
 
 
 def get_api_key() -> str:
@@ -66,23 +66,25 @@ def gen_content_with_usage(
     }
 
 
-def print_gen_result(result: GenerationResult) -> None:
+def print_gen_result(result: GenerationResult, verbose_mode: bool) -> None:
     """Prints formatted result"""
+    if verbose_mode:
+        print(f"User prompt: {result['user_prompt']}")
+        print(f"Prompt tokens: {result['prompt_token_count']}")
+        print(f"Response tokens: {result['response_token_count']}")
 
-    print(f"User prompt: {result['user_prompt']}")
-    print(f"Prompt tokens: {result['prompt_token_count']}")
-    print(f"Response tokens: {result['response_token_count']}")
     print(f"Response: {result['response_text']}")
 
 
 def main() -> None:
     load_env()
+    cli_args = get_cli_args()
 
     try:
         gen_ai_client = create_client(get_api_key())
-        user_prompt = get_user_prompt()
-        result = gen_content_with_usage(gen_ai_client, prompt=user_prompt)
-        print_gen_result(result)
+        initial_prompt = " ".join(cli_args.prompt)
+        result = gen_content_with_usage(gen_ai_client, prompt=initial_prompt)
+        print_gen_result(result, cli_args.verbose)
 
     except Exception as ex:
         print(f"Error: {ex}")
