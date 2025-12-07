@@ -12,10 +12,10 @@ ENV_GEMINI_API_KEY: Final = "GEMINI_API_KEY"
 
 
 class GenerationResult(TypedDict):
-    user_prompt: str | None
-    prompt_token_count: int | None
-    response_token_count: int | None
-    response_text: str | None
+    user_prompt: str
+    prompt_token_count: int
+    response_token_count: int
+    response_text: str
 
 
 def load_env() -> None:
@@ -55,7 +55,7 @@ def gen_content_with_usage(
 
     response = gen_ai_client.models.generate_content(model=model, contents=messages)
 
-    if response.usage_metadata is None:
+    if response.usage_metadata is None or response.text is None:
         raise RuntimeError(ErrorMessage.API_REQUEST_FAILED)
 
     return {
