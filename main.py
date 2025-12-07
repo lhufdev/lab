@@ -4,6 +4,7 @@ from typing import Final, TypedDict
 
 from dotenv import load_dotenv
 from google import genai
+from google.genai import types
 
 from constants import ErrorMessage, Model
 
@@ -46,9 +47,13 @@ def gen_content_with_usage(
     prompt: str,
     model: Model = Model.FLASH_25,
 ) -> GenerationResult:
-    """Generate test response from Gemini"""
+    """Generate response from Gemini"""
 
-    response = gen_ai_client.models.generate_content(model=model, contents=prompt)
+    messages: list[types.Content] = [
+        types.Content(role="user", parts=[types.Part(text=prompt)])
+    ]
+
+    response = gen_ai_client.models.generate_content(model=model, contents=messages)
 
     if response.usage_metadata is None:
         raise RuntimeError(ErrorMessage.API_REQUEST_FAILED)
