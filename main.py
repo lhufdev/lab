@@ -7,12 +7,22 @@ from google import genai
 from google.genai import types
 
 from config import MODEL, ErrorMessage
+from functions.get_files_info import schema_get_files_info
 from prompts import SYSTEM_PROMPT
 
 ENV_GEMINI_API_KEY: Final = "GEMINI_API_KEY"
 
+# Register available tool schemas (function calling)
+available_functions = types.Tool(function_declarations=[schema_get_files_info])
+
+# Generation config
+config = types.GenerateContentConfig(
+    tools=[available_functions], system_instruction=SYSTEM_PROMPT
+)
+
 
 class GenerationResult(TypedDict):
+    # Normalised shape of model response
     user_prompt: str
     prompt_token_count: int | None
     response_token_count: int | None
@@ -43,6 +53,12 @@ def create_client(api_key: str) -> genai.Client:
     return genai.Client(api_key=api_key)
 
 
+def get_function_calls_text(function_calls) -> str:
+    # Convert function calls into string
+    calls = [f"Calling function: {call.name}({call.args})" for call in function_calls]
+    return "\n".join(calls)
+
+
 def gen_content_with_usage(
     gen_ai_client: genai.Client,
     prompt: str,
@@ -50,8 +66,7 @@ def gen_content_with_usage(
 ) -> GenerationResult:
     """Generate response from Gemini"""
 
-    config = types.GenerateContentConfig(system_instruction=SYSTEM_PROMPT)
-
+    # Wrap user prompt in required Gemini content format
     messages: list[types.Content] = [
         types.Content(role="user", parts=[types.Part(text=prompt)])
     ]
@@ -60,14 +75,24 @@ def gen_content_with_usage(
         model=model, contents=messages, config=config
     )
 
-    if response.usage_metadata is None or response.text is None:
+    # usage_metadata requrired for token accounting
+    if response.usage_metadata is None:
         raise RuntimeError(ErrorMessage.API_REQUEST_FAILED)
+
+    # If present prefer function calls, otherwise fallback to text
+    # Ensure response_text is always string
+    if response.function_calls:
+        response_text = get_function_calls_text(response.function_calls)
+    elif response.text is not None:
+        response_text = response.text
+    else:
+        response_text = ""
 
     return {
         "user_prompt": prompt,
         "prompt_token_count": response.usage_metadata.prompt_token_count,
         "response_token_count": response.usage_metadata.candidates_token_count,
-        "response_text": response.text,
+        "response_text": response_text,
     }
 
 
