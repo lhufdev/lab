@@ -27,12 +27,6 @@ def get_cli_args() -> argparse.Namespace:
     return parser.parse_args()
 
 
-def get_function_calls_text(function_calls) -> str:
-    # Convert function calls into string
-    calls = [f"Calling function: {call.name}({call.args})" for call in function_calls]
-    return "\n".join(calls)
-
-
 def call_function(function_call_part, verbose: bool = False):
     if verbose:
         print(f"Calling function: {function_call_part.name}({function_call_part.args})")
