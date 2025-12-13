@@ -1,5 +1,4 @@
 import argparse
-from typing import TypedDict
 
 from google import genai
 from google.genai import types
@@ -10,14 +9,6 @@ from functions.get_files_info import get_files_info
 from functions.run_python_file import run_python_file
 from functions.write_file import write_file
 from llm_client import config, create_client, get_api_key, load_env
-
-
-class GenerationResult(TypedDict):
-    # Normalised shape of model response
-    user_prompt: str
-    prompt_token_count: int | None
-    response_token_count: int | None
-    response_text: str
 
 
 def get_cli_args() -> argparse.Namespace:
@@ -63,72 +54,55 @@ def call_function(function_call_part, verbose: bool = False):
     )
 
 
-def gen_content_with_usage(
+def generate_content(
     gen_ai_client: genai.Client,
-    prompt: str,
+    messages: list[types.Content],
     model: str,
-    verbose: bool = False,
-) -> GenerationResult:
-    """Generate response from Gemini"""
-
-    # Wrap user prompt in required Gemini content format
-    messages: list[types.Content] = [
-        types.Content(role="user", parts=[types.Part(text=prompt)])
-    ]
-
+    verbose: bool,
+) -> types.GenerateContentResponse:
     response = gen_ai_client.models.generate_content(
         model=model, contents=messages, config=config
     )
 
-    # usage_metadata requrired for token accounting
     if response.usage_metadata is None:
         raise RuntimeError(ErrorMessage.API_REQUEST_FAILED)
 
-    # If present prefer function calls, otherwise fallback to text
-    # Ensure response_text is always string
-    function_call_parts: list[types.Part] = []
-    if response.function_calls:
-        for function_call in response.function_calls:
-            function_call_result = call_function(function_call, verbose=verbose)
+    if verbose:
+        print("Prompt tokens:", response.usage_metadata.prompt_token_count)
+        print("Response tokens:", response.usage_metadata.candidates_token_count)
 
-            if (
-                not function_call_result.parts
-                or function_call_result.parts[0].function_response is None
-                or function_call_result.parts[0].function_response.response is None
-            ):
-                raise RuntimeError(
-                    "Fatal: tool response is missing function_response.response"
-                )
+    # add each candidates content to the message list
+    if response.candidates:
+        for candidate in response.candidates:
+            if candidate.content:
+                messages.append(candidate.content)
 
-            function_call_parts.append(function_call_result.parts[0])
+    # if no tools called, return
+    if not response.function_calls:
+        return response
 
-            if verbose:
-                print(f"-> {function_call_result.parts[0].function_response.response}")
+    # call tools and collect parts
+    function_responses: list[types.Part] = []
+    for function_call_part in response.function_calls:
+        function_call_result = call_function(function_call_part, verbose)
 
-        response_text = ""
+        if (
+            not function_call_result.parts
+            or function_call_result.parts[0].function_response is None
+            or function_call_result.parts[0].function_response.response is None
+        ):
+            raise RuntimeError("empty function call result")
 
-    elif response.text is not None:
-        response_text = response.text
-    else:
-        response_text = ""
+        if verbose:
+            print(f"-> {function_call_result.parts[0].function_response.response}")
 
-    return {
-        "user_prompt": prompt,
-        "prompt_token_count": response.usage_metadata.prompt_token_count,
-        "response_token_count": response.usage_metadata.candidates_token_count,
-        "response_text": response_text,
-    }
+        function_responses.append(function_call_result.parts[0])
 
+    if not function_responses:
+        raise RuntimeError("no function responses generated. exiting...")
 
-def print_gen_result(result: GenerationResult, verbose_mode: bool) -> None:
-    """Prints formatted result"""
-    if verbose_mode:
-        print(f"User prompt: {result['user_prompt']}")
-        print(f"Prompt tokens: {result['prompt_token_count']}")
-        print(f"Response tokens: {result['response_token_count']}")
-
-    if result["response_text"]:
-        print(f"Response: {result['response_text']}")
+    messages.append(types.Content(role="user", parts=function_responses))
+    return response
 
 
 def main() -> None:
@@ -138,10 +112,41 @@ def main() -> None:
     try:
         gen_ai_client = create_client(get_api_key())
         initial_prompt = " ".join(cli_args.prompt)
-        result = gen_content_with_usage(
-            gen_ai_client, prompt=initial_prompt, model=MODEL, verbose=cli_args.verbose
-        )
-        print_gen_result(result, cli_args.verbose)
+
+        messages: list[types.Content] = [
+            types.Content(role="user", parts=[types.Part(text=initial_prompt)])
+        ]
+
+        last_response_text: str | None = None
+        last_had_function_calls: bool = False
+
+        for i in range(20):
+            response = generate_content(
+                gen_ai_client, messages=messages, model=MODEL, verbose=cli_args.verbose
+            )
+
+            last_had_function_calls = bool(response.function_calls)
+
+            if not last_had_function_calls:
+                last_response_text = response.text
+
+            finished = (not response.function_calls) and bool(
+                response.text and response.text.strip()
+            )
+            if finished:
+                print("Final response:")
+                print(response.text)
+                break
+
+        else:
+            details = []
+            details.append(f"last_had_function_calls={last_had_function_calls}")
+            details.append(
+                f"last_response_text_present={bool(last_response_text and last_response_text.strip())}"
+            )
+            raise RuntimeError(
+                "Reached max iterations (20) without finishing. " + ", ".join(details)
+            )
 
     except Exception as ex:
         print(f"Error: {ex}")
