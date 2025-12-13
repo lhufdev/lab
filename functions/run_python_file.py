@@ -1,6 +1,8 @@
 import os
 import subprocess
 
+from google.genai import types
+
 from config import PYTHON_RUN_TIMEOUT
 from utils import resolve_and_validate_path
 
@@ -51,3 +53,23 @@ def run_python_file(
 
     except Exception as ex:
         return f"Error: executing python file: {ex}"
+
+
+schema_run_python_file = types.FunctionDeclaration(
+    name="run_python_file",
+    description="Run the provided python file called with the given args, constrained to the working directory.",
+    parameters=types.Schema(
+        type=types.Type.OBJECT,
+        properties={
+            "file_path": types.Schema(
+                type=types.Type.STRING,
+                description="The path of the target file, relative to the working directory.",
+            ),
+            "args": types.Schema(
+                type=types.Type.ARRAY,
+                description="The list of args to call the function with.",
+                items=types.Schema(type=types.Type.STRING),
+            ),
+        },
+    ),
+)
